@@ -1,0 +1,343 @@
+---
+title: "EDA: Portuguese Bank Marketing"
+author: "Julia Oriana"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+The dataset to be worked with can be found in [Bank Marketing](https://archive.ics.uci.edu/dataset/222/bank+marketing)
+
+# Explanation
+
+The data is related with direct marketing campaigns of a Portuguese banking institution. The marketing campaigns were based on phone calls. Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed.
+
+# Input Data
+
+[Bank Marketing](https://archive.ics.uci.edu/dataset/222/bank+marketing) provides many version of data, but the data that will be used in this project will be the 'bank.xlsx' version.
+
+```{r}
+library(readxl)
+bank <- read_excel("C:/Users/HP/Downloads/bank-marketing/bank.xlsx")
+```
+
+## Data Inspection
+
+```{r}
+head(bank)
+```
+
+```{r}
+tail(bank)
+```
+
+```{r}
+dim(bank)
+```
+
+```{r}
+names(bank)
+```
+
+From the inspection, we can conclude:\
+\* `bank` data contain 4521 rows with 17 columns\
+\* Each columns name: "age", "job", "marital", "education", "default", "balance", "housing", "loan", "contact", "day", "month", "duration", "campaign", "pdays", "previous", "poutcome", and "y"
+
+## Data Cleansing & Coertions
+
+Check data types of each columns
+
+```{r}
+str(bank)
+```
+
+From this result, we find some of data type not in the corect type. we need to convert it into correct type (data coertion)
+
+```{r}
+bank$job <- as.factor(bank$job)
+bank$marital <- as.factor(bank$marital)
+bank$education <- as.factor(bank$education)
+bank$default <- as.factor(bank$default)
+bank$balance <- as.integer(bank$balance)
+bank$housing <- as.factor(bank$housing)
+bank$loan <- as.factor(bank$loan)
+bank$contact <- as.factor(bank$contact)
+bank$month <- as.factor(bank$month)
+bank$campaign <- as.integer(bank$campaign)
+bank$pdays <- as.integer(bank$pdays)
+bank$poutcome <- as.factor(bank$poutcome)
+bank$y <- as.factor(bank$y)
+```
+
+```{r}
+str(bank)
+```
+
+All columns have been updated to the desired data type.
+
+Checking the missing values
+
+```{r}
+colSums(is.na(bank))
+```
+
+```{r}
+anyNA(bank)
+```
+
+This is great, there is no missing values in the data.
+
+Before we do the exploration, we will subset the data in which only giving the desired columns and save it with `Bank` variable.
+
+The reason why I decided to not include the 'day' column is because this dataset didn't provide more information about the year of the contact. Therefore we will do exploration according to the 'month' of the customer contact.
+
+```{r}
+Bank <- bank[,c(1:9, 11, 13, 17)]
+head(Bank)
+```
+
+# Data Exploratory
+
+## Brief explanation
+
+```{r}
+summary(Bank)
+```
+
+Columns description:\
+\* 'age' : the customer age\
+\* 'job' : type of the customer job\
+\* 'marital' : customer marital status\
+\* 'education' : customer education level\
+\* 'default' : information if the customer has a credit in default\
+\* 'balance' : the average yearly balance\
+\* 'housing' : information if the customer has a housing loan\
+\* 'loan' : information if the customer has a personal loan\
+\* 'contact' : the contact communication type\
+\* 'month' : last contact month of year\
+\* 'campaign' : number of contacts performed during this campaign and for this client\
+\* 'y' : the target (information if the customer has decided to subscribe or not)
+
+## Correlation 
+
+We will see if there is a correlation between each numeric column to the target `y`
+
+```{r, message = TRUE}
+library(reshape2)
+library(ggplot2)
+library(gcookbook)
+library(magrittr)
+library(dplyr)
+```
+
+```{r}
+numeric_vars <- names(Bank)[sapply(Bank, is.numeric)]
+numeric_data <- Bank[, numeric_vars]
+
+numeric_data$target_var <- ifelse(Bank$y == "yes", 1, 0)
+
+cor_matrix <- cor(numeric_data)
+cor_melted <- melt(cor_matrix)
+```
+
+```{r}
+ggplot(cor_melted, aes(Var1, Var2, fill = value))+
+  geom_tile()+
+  geom_text(aes(label = round(value, 2)), color = "black", size = 3, vjust = 0.5) +
+  scale_fill_gradient2(high = "darkcyan", midpoint = 0) +
+  theme_minimal() +
+  labs(x = "", y = "", title = "Heatmap of Numeric Variables with Target Variable") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(angle = 0, hjust = 1))
+```
+
+According to the heatmap above, there is no strong correlation between the numeric factors with the target.
+
+## Obtained Insights
+
+### The Information of The Bank's Target
+
+Here we have the distribution of the target.
+
+```{r}
+ggplot(Bank, aes(x = factor(y)))+
+  geom_bar(fill = "lightgreen")+
+  geom_text(stat = "count", aes(label = paste0(..count.., " (", scales::percent(..count../sum(..count..)), ")")), vjust = 1.5, colour = "black")+
+  labs(title = "Number of Subscription Target")
+```
+
+The target is quite unequal, as shown by the bar chart above. As a result, we'll make an effort to concentrate on the subscribers' customers.
+
+### Check The Outlier 
+
+#### Within The Age
+
+```{r}
+aggregate(age~y, Bank, mean)
+```
+
+```{r}
+aggregate(age~y, Bank, sd)
+```
+
+
+```{r}
+boxplot(Bank$age)
+```
+From the results above, we can see that there are possibilities of outliers, but since the standard deviation is below the mean, we can say that the age's of each category of target(y) is quite homogenous.
+
+#### Within The Balance
+
+```{r}
+aggregate(balance~y, Bank, mean)
+```
+
+```{r}
+aggregate(balance~y, Bank, sd)
+```
+
+```{r}
+boxplot(Bank$balance)
+```
+  
+According to the results above, we can see that there outliers within the balance, other than that, the standard deviation within each category of y are bigger than the mean which also indicate that the range of data is quite heterogeneous.
+
+### Informations According To The Month
+
+First, we will set the order of the month. 
+```{r}
+month_order <- c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+Bank$month <- factor(Bank$month, levels = month_order)
+```
+
+Now we'll see the number of contact that happened in each month. 
+```{r}
+ggplot(Bank, aes(x = month)) +
+  geom_bar(fill = "lightgreen") +
+  geom_text(stat = "count", 
+            aes(label = paste0(scales::percent(..count../sum(..count..)))), 
+            vjust = 0.1, 
+            colour = "black") +
+  labs(title = "Amount of contact according by month")
+```
+
+We see that the month of May had the most contact while the month of December had the least. This will affect the goal subscription number.  
+
+The number of target subscriptions in each month will now be visible.
+
+```{r}
+month_y <- Bank %>%
+  filter(y == "yes") %>%
+  group_by(month) %>%
+  summarise(percentage = (n()/sum(Bank$y == "yes"))*100)
+
+month_y
+```
+
+```{r}
+ggplot(month_y, aes(x = month, y = percentage))+
+  geom_col(fill = "lightgreen")+
+  geom_text(aes(label = paste(round(percentage, 3), "%")),
+            vjust = 0.1, 
+            colour = "black")+
+  labs(title = "Percentage of clients who decide to sign up for the deposit")
+```
+  
+We are able to see that at least 17.85% of customers choose to subscribe in May. Only 1.73% of customers chose to subscribe in December, though.   
+
+### Information According To The Group of The Age
+
+What about the ages of the subscribed client? Here we're going to divide the ages of the subscribed customer. 
+
+```{r}
+age_gap <- c(18, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+Bank$age <- cut(Bank$age, breaks = age_gap, labels = c("18-20", "21-30", "31-40", "41-50", "51-60", "61-70", "71-80", "81-90", "90+"))
+```
+
+
+```{r}
+age_y <- Bank %>%
+  filter(y == "yes") %>%
+  group_by(age) %>%
+  summarise(frequency = n())
+
+age_y
+```
+  
+We can see from the graphic above that the majority of the customers who choose to subscribe are between the ages of 31 and 40. While the youngest deposit subscribers were two individuals between the ages of 18 and 20.
+
+### Information According to The Job and Education
+
+Since we are focusing on the subscribed clients, we're about to get to know about their relevant information from their job and education
+
+```{r}
+job_y <- Bank %>%
+  filter(y == "yes") %>%
+  group_by(job) %>%
+  summarise(freq = n())
+
+job_y
+```
+  
+From the table above, most of the subscribed clients are working in management filed. 
+  
+```{r}
+education_y <- Bank %>%
+  filter(y == "yes") %>%
+  group_by(education) %>%
+  summarise(freq = n())
+
+education_y
+```
+
+On the other hand, the majority of subscribers are on the secondary education track.
+
+### Business Question 
+  
+1. Which job gives the lowest yearly balance to subscribe the deposit?
+```{r}
+test <- filter(Bank, y == "yes")
+test[test$balance == min(test$balance), ]
+```
+The lowest yearly balance came from a client who is already retired.   
+
+2. Which way of contact that has obtained many subscribers?
+
+```{r}
+test %>%
+  group_by(contact) %>%
+  summarise(count = n())
+```
+It appears, that mostly subscribers was contacted via cellular
+
+3. How many contacts that most needed in order to get subscriber ?
+```{r}
+test %>%
+  group_by(contact) %>%
+  summarise(mean(campaign))
+```
+It seems that most subscribers were contacted 2 or 3 times to decide to subscribe. 
+
+4. How much yearly balance from each category of housing and loan?
+```{r}
+xtabs(balance~housing +loan, test)
+```
+```{r}
+plot(xtabs(balance~housing+loan, test))
+```
+The majority of subscribers don't seem to have personal loans or even housing loans. While the minority on the other hand, have personal loan but not a housing loan.  
+
+5. How much the yearly balance from each category of marital and credit default?
+```{r}
+xtabs(balance~marital+default, test)
+```
+```{r}
+plot(xtabs(balance~marital+default, test))
+```
+  
+Now we found that most subscribers are married with no credit in default.  
+
+# Closing
+The EDA for this project ends there. In order to create a statistical model with a target of the customers subscription, it was necessary to obtain this project in order to examine the insights that the dataset bring. Other than that, it was done to demonstrate the writer's EDA programming abilities.  
+
+Thank you:)
